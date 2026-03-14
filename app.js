@@ -5,6 +5,9 @@ let idx = 0;
 let vals = {};
 let showImg = true;
 let availableFiles = []; // [{displayName, type:'remote'|'local', url?, file?}]
+let saveDirHandle = null;
+let currentFileName = "";
+let fileAutosaveTimer = null;
 const img = new Image();
 
 const LC = {
@@ -57,6 +60,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("keydown", onGlobalKeydown);
   window.addEventListener("resize", debounce(() => jData && updateUI(), 120));
+
+  $("btnPickSaveDir").addEventListener("click", pickSaveDir);
 });
 
 /* ===== Login ===== */
@@ -213,6 +218,18 @@ function readJsonFile(file) {
 async function openData(data, fileName) {
   jData = data;
   idx = 0;
+  currentFileName = fileName;
+  vals = {}; // прогресс будет отдельно для каждого JSON
+
+  // сначала localStorage для этого файла
+  try {
+    const k = lsKey();
+    const s = localStorage.getItem(k);
+    if (s) vals = JSON.parse(s).vals || {};
+  } catch (_) {}
+
+  // затем, если выбрана папка — прогресс из файла (приоритетнее)
+  await loadProgressFromFile();
 
   const ext = (data.imagePath || "img.jpg").split(".").pop().toLowerCase();
   const mime = MIME_BY_EXT[ext] || "jpeg";
@@ -626,11 +643,18 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+function lsKey() {
+  return `cv_${userName}__${currentFileName || "no_file"}`;
+}
+
 function save() {
   if (!userName) return;
+
   try {
-    localStorage.setItem("cv_" + userName, JSON.stringify({ vals, ts: Date.now() }));
+    localStorage.setItem(lsKey(), JSON.stringify({ vals, ts: Date.now() }));
   } catch (_) {}
+
+  scheduleFileSave();
 }
 
 function debounce(fn, ms) {
@@ -639,4 +663,78 @@ function debounce(fn, ms) {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+}
+
+function safeName(s) {
+  return String(s || "unknown").replace(/[^\p{L}\p{N}\-_\.]+/gu, "_");
+}
+
+function progressFileName() {
+  const base = safeName(currentFileName.replace(/\.json$/i, ""));
+  const user = safeName(userName);
+  return `${base}__${user}.validation.json`;
+}
+
+async function pickSaveDir() {
+  if (!window.showDirectoryPicker) {
+    toast("Браузер не поддерживает запись в папку (нужен Chrome/Edge)");
+    return;
+  }
+
+  try {
+    saveDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    toast("Папка сохранения выбрана");
+    // если файл уже открыт — попробуем подтянуть прогресс из файла
+    if (jData && currentFileName) {
+      await loadProgressFromFile();
+      updateUI();
+      await persistToFile();
+    }
+  } catch {
+    // пользователь отменил
+  }
+}
+
+async function persistToFile() {
+  if (!saveDirHandle || !userName || !currentFileName) return;
+
+  const payload = {
+    version: 1,
+    userName,
+    sourceFile: currentFileName,
+    savedAt: new Date().toISOString(),
+    vals
+  };
+
+  const fh = await saveDirHandle.getFileHandle(progressFileName(), { create: true });
+  const writable = await fh.createWritable();
+  await writable.write(JSON.stringify(payload, null, 2));
+  await writable.close();
+}
+
+function scheduleFileSave() {
+  clearTimeout(fileAutosaveTimer);
+  fileAutosaveTimer = setTimeout(() => {
+    persistToFile().catch((e) => {
+      console.warn("Ошибка автосохранения в файл:", e);
+    });
+  }, 200);
+}
+
+async function loadProgressFromFile() {
+  if (!saveDirHandle || !currentFileName) return;
+
+  try {
+    const fh = await saveDirHandle.getFileHandle(progressFileName(), { create: false });
+    const file = await fh.getFile();
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+
+    if (parsed && parsed.vals && typeof parsed.vals === "object") {
+      vals = parsed.vals;
+      toast(`Загружен прогресс из файла: ${Object.keys(vals).length}`);
+    }
+  } catch {
+    // файла ещё нет — это нормально
+  }
 }
