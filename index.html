@@ -61,7 +61,7 @@ html, body {
   text-transform: uppercase;
   letter-spacing: .7px;
 }
-.field input {
+.field input, .field select {
   width: 100%;
   padding: 12px 14px;
   background: var(--bg2);
@@ -72,7 +72,7 @@ html, body {
   outline: none;
   transition: border-color .2s;
 }
-.field input:focus { border-color: var(--blue); }
+.field input:focus, .field select:focus { border-color: var(--blue); }
 .field input.err   { border-color: var(--red);  }
 .btn-primary {
   width: 100%;
@@ -87,6 +87,7 @@ html, body {
   transition: background .2s;
 }
 .btn-primary:hover { background: var(--blue-h); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ══════════ APP SHELL ══════════ */
 #appScreen {
@@ -190,6 +191,53 @@ html, body {
 .upload-box .uico { font-size: 48px; margin-bottom: 14px; }
 .upload-box h2    { font-size: 19px; margin-bottom: 8px; }
 .upload-box p     { color: var(--text2); font-size: 13px; margin-bottom: 24px; line-height: 1.6; }
+.upload-box hr    { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+.file-list {
+  text-align: left;
+  margin-bottom: 24px;
+}
+.file-list h3 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 10px;
+}
+.file-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.file-items::-webkit-scrollbar { width: 4px; }
+.file-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.file-item {
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  font-size: 12px;
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-item:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: rgba(88,166,255,.05);
+}
+.file-item.loading {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
 .btn-upload {
   display: inline-flex;
   align-items: center;
@@ -205,6 +253,18 @@ html, body {
   transition: background .2s;
 }
 .btn-upload:hover { background: var(--blue-h); }
+
+.loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(88,166,255,.3);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ══════════ MAIN LAYOUT ══════════ */
 #mainContent {
@@ -612,6 +672,7 @@ html, body {
       <label  class="btn-icon" for="jsonFileInput">📂 Загрузить JSON</label>
       <input  type="file" id="jsonFileInput" accept=".json" onchange="loadFile(event)">
       <button class="btn-icon green" onclick="exportXLSX()">📊 Экспорт Excel</button>
+      <button class="btn-icon" id="btnBack" onclick="backToUpload()" style="display:none;">← Назад</button>
     </div>
   </header>
 
@@ -633,6 +694,14 @@ html, body {
       <h2>Загрузите LabelMe JSON</h2>
       <p>Перетащите файл сюда или нажмите кнопку ниже.<br>
          Файл должен содержать поле <code>imageData</code> (base64).</p>
+
+      <div id="fileListContainer" class="file-list" style="display:none;">
+        <h3>📋 Доступные файлы:</h3>
+        <div class="file-items" id="fileListItems"></div>
+      </div>
+
+      <hr>
+
       <button class="btn-upload"
               onclick="event.stopPropagation(); document.getElementById('jsonFileInput').click()">
         Выбрать файл
@@ -751,6 +820,7 @@ let jData    = null;
 let idx      = 0;
 let vals     = {};
 let showImg  = true;
+let availableFiles = [];
 const img    = new Image();
 
 const LC = {
@@ -769,13 +839,103 @@ function login() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appScreen').style.display   = 'flex';
   document.getElementById('vName').textContent = n;
+  loadFileList();
   try {
     const s = localStorage.getItem('cv_' + n);
     if (s) { vals = JSON.parse(s).vals || {}; toast('Восстановлено ' + Object.keys(vals).length + ' меток'); }
   } catch(e) {}
 }
 
-/* ─── FILE LOADING ─── */
+/* ─── LOAD FILE LIST ─── */
+async function loadFileList() {
+  try {
+    const response = await fetch('annotations/');
+    if (!response.ok) {
+      console.warn('Папка annotations не найдена');
+      return;
+    }
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const links = doc.querySelectorAll('a');
+    availableFiles = [];
+
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && href.endsWith('.json') && !href.startsWith('?')) {
+        availableFiles.push({
+          name: href,
+          displayName: href.split('/').pop()
+        });
+      }
+    });
+
+    if (availableFiles.length > 0) {
+      renderFileList();
+    }
+  } catch(e) {
+    console.warn('Ошибка загрузки списка файлов:', e);
+  }
+}
+
+/* ─── RENDER FILE LIST ─── */
+function renderFileList() {
+  const container = document.getElementById('fileListContainer');
+  const itemsDiv = document.getElementById('fileListItems');
+
+  if (availableFiles.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  itemsDiv.innerHTML = '';
+
+  availableFiles.forEach(file => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.textContent = file.displayName;
+    item.onclick = () => loadAnnotationFile(file.name);
+    item.title = file.name;
+    itemsDiv.appendChild(item);
+  });
+}
+
+/* ─── LOAD ANNOTATION FILE ─── */
+async function loadAnnotationFile(fileName) {
+  const item = event.target;
+  item.classList.add('loading');
+  item.innerHTML = '<span class="loading-spinner"></span>' + item.textContent;
+
+  try {
+    const response = await fetch('annotations/' + fileName);
+    if (!response.ok) throw new Error('Файл не найден');
+    const data = await response.json();
+    jData = data;
+    idx = 0;
+
+    const ext  = (data.imagePath || 'img.jpg').split('.').pop().toLowerCase();
+    const mime = { jpg:'jpeg', jpeg:'jpeg', png:'png', bmp:'bmp', gif:'gif' }[ext] || 'jpeg';
+
+    if (data.imageData) {
+      img.onload  = () => initViewer(fileName);
+      img.onerror = () => { toast('Ошибка загрузки imageData'); initViewer(fileName); };
+      img.src = data.imageData.startsWith('data:')
+        ? data.imageData
+        : `data:image/${mime};base64,${data.imageData}`;
+    } else {
+      img.src = '';
+      toast('Поле imageData отсутствует — только контуры');
+      initViewer(fileName);
+    }
+  } catch(err) {
+    item.classList.remove('loading');
+    item.innerHTML = item.textContent;
+    toast('Ошибка: ' + err.message);
+  }
+}
+
+/* ─── FILE LOADING (MANUAL) ─── */
 function handleDrop(e) {
   e.preventDefault();
   document.querySelector('.upload-box').classList.remove('over');
@@ -820,6 +980,7 @@ function initViewer(fileName) {
   document.getElementById('uploadArea').style.display  = 'none';
   document.getElementById('mainContent').style.display = 'flex';
   document.getElementById('progWrap').style.display    = 'block';
+  document.getElementById('btnBack').style.display     = 'flex';
   const n  = jData.shapes.length;
   const iw = jData.imageWidth  || img.naturalWidth  || '?';
   const ih = jData.imageHeight || img.naturalHeight || '?';
@@ -827,6 +988,17 @@ function initViewer(fileName) {
   document.getElementById('jumpInput').max        = n;
   document.getElementById('fileInfo').textContent = `${fileName} · ${n} кл. · ${iw}×${ih}`;
   updateUI();
+}
+
+/* ─── BACK TO UPLOAD ─── */
+function backToUpload() {
+  jData = null;
+  idx = 0;
+  document.getElementById('uploadArea').style.display  = 'flex';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('progWrap').style.display    = 'none';
+  document.getElementById('btnBack').style.display     = 'none';
+  document.getElementById('navCur').textContent = '1';
 }
 
 /* ─── TOGGLE IMAGE ─── */
@@ -1002,7 +1174,6 @@ function navigate(d) {
   updateUI();
 }
 
-/* jump to last labeled cell (highest index with a label) */
 function lastLabeledIdx() {
   const keys = Object.keys(vals).map(Number);
   return keys.length ? Math.max(...keys) : null;
@@ -1016,7 +1187,6 @@ function goToLast() {
   toast(`Переход к клетке #${li + 1}`);
 }
 
-/* jump to specific cell by number input */
 function jumpTo() {
   if (!jData) return;
   const val = parseInt(document.getElementById('jumpInput').value, 10);
@@ -1052,7 +1222,6 @@ function renderList() {
     const vlabel  = v ? v.valLabel : '';
     const numStr  = String(i + 1);
 
-    /* filter by query */
     if (q) {
       const match = numStr.includes(q) || vlabel.toLowerCase().includes(q)
                  || (shape.label || '').toLowerCase().includes(q);
@@ -1063,22 +1232,18 @@ function renderList() {
     div.className = 'cell-item' + (i === idx ? ' current' : '');
     div.onclick   = () => { idx = i; updateUI(); closeList(); };
 
-    /* dot */
     const dot = document.createElement('span');
     dot.className = 'ci-dot';
     dot.style.background = vlabel ? LC[vlabel] : 'var(--border)';
 
-    /* number */
     const num = document.createElement('span');
     num.className   = 'ci-num';
     num.textContent = '#' + (i + 1);
 
-    /* original label */
     const lbl = document.createElement('span');
     lbl.className   = 'ci-label';
     lbl.textContent = shape.label || '—';
 
-    /* validator label badge */
     const badge = document.createElement('span');
     badge.className = 'ci-badge';
     if (vlabel) {
@@ -1102,7 +1267,6 @@ function renderList() {
     ul.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">Ничего не найдено</div>';
   }
 
-  /* scroll current into view */
   const cur = ul.querySelector('.current');
   if (cur) cur.scrollIntoView({ block: 'center' });
 }
