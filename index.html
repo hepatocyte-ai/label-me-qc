@@ -1,1331 +1,152 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LabelMe Cell Validator</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-:root {
-  --bg:     #0d1117;
-  --bg2:    #161b22;
-  --bg3:    #21262d;
-  --border: #30363d;
-  --text:   #f0f6fc;
-  --text2:  #8b949e;
-  --blue:   #58a6ff;
-  --blue-h: #79b8ff;
-  --red:    #f85149;
-  --green:  #3fb950;
-  --yellow: #d29922;
-  --purple: #bc8cff;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  height: 100%;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-}
-
-/* ══════════ LOGIN ══════════ */
-#loginScreen {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(ellipse at 50% 35%, #1a2035 0%, var(--bg) 70%);
-}
-.login-card {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 48px 40px;
-  width: 400px;
-  text-align: center;
-  box-shadow: 0 24px 64px rgba(0,0,0,.7);
-}
-.login-card .logo { font-size: 52px; margin-bottom: 18px; }
-.login-card h1    { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
-.login-card .sub  { color: var(--text2); font-size: 13px; margin-bottom: 32px; }
-.field            { margin-bottom: 18px; text-align: left; }
-.field label {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text2);
-  margin-bottom: 7px;
-  text-transform: uppercase;
-  letter-spacing: .7px;
-}
-.field input, .field select {
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-  transition: border-color .2s;
-}
-.field input:focus, .field select:focus { border-color: var(--blue); }
-.field input.err   { border-color: var(--red);  }
-.btn-primary {
-  width: 100%;
-  padding: 13px;
-  background: var(--blue);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .2s;
-}
-.btn-primary:hover { background: var(--blue-h); }
-.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-
-/* ══════════ APP SHELL ══════════ */
-#appScreen {
-  display: none;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* ── HEADER ── */
-.header {
-  flex-shrink: 0;
-  height: 50px;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.header-logo {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--blue);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.vbadge {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 12px;
-  color: var(--text2);
-  margin-left: 10px;
-}
-.vbadge b { color: var(--text); }
-.header-right { display: flex; gap: 6px; align-items: center; }
-
-.btn-icon {
-  padding: 5px 11px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg3);
-  color: var(--text);
-  transition: all .2s;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.btn-icon:hover { border-color: var(--blue); color: var(--blue); }
-.btn-icon.green { border-color: var(--green); color: var(--green); background: rgba(63,185,80,.07); }
-.btn-icon.green:hover { background: rgba(63,185,80,.18); }
-.btn-icon.toggled { border-color: var(--yellow); color: var(--yellow); background: rgba(210,153,34,.09); }
-#jsonFileInput { display: none; }
-
-/* ── PROGRESS ── */
-.prog-wrap {
-  flex-shrink: 0;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  padding: 5px 14px 7px;
-  display: none;
-}
-.prog-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text2);
-  margin-bottom: 4px;
-}
-.prog-track { height: 3px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.prog-fill  { height: 100%; background: var(--blue); border-radius: 3px; transition: width .4s; }
-
-/* ── UPLOAD ── */
-#uploadArea {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  overflow: auto;
-}
-.upload-box {
-  background: var(--bg3);
-  border: 2px dashed var(--border);
-  border-radius: 20px;
-  padding: 52px 40px;
-  text-align: center;
-  width: 460px;
-  cursor: pointer;
-  transition: border-color .2s, background .2s;
-}
-.upload-box:hover,
-.upload-box.over { border-color: var(--blue); background: rgba(88,166,255,.04); }
-.upload-box .uico { font-size: 48px; margin-bottom: 14px; }
-.upload-box h2    { font-size: 19px; margin-bottom: 8px; }
-.upload-box p     { color: var(--text2); font-size: 13px; margin-bottom: 24px; line-height: 1.6; }
-.upload-box hr    { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
-
-.file-list {
-  text-align: left;
-  margin-bottom: 24px;
-}
-.file-list h3 {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text2);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  margin-bottom: 10px;
-}
-.file-items {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.file-items::-webkit-scrollbar { width: 4px; }
-.file-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-.file-item {
-  padding: 8px 12px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all .15s;
-  font-size: 12px;
-  color: var(--text2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-item:hover {
-  border-color: var(--blue);
-  color: var(--blue);
-  background: rgba(88,166,255,.05);
-}
-.file-item.loading {
-  opacity: .6;
-  cursor: not-allowed;
-}
-
-.btn-upload {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  background: var(--blue);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .2s;
-}
-.btn-upload:hover { background: var(--blue-h); }
-
-.loading-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(88,166,255,.3);
-  border-top-color: var(--blue);
-  border-radius: 50%;
-  animation: spin .6s linear infinite;
-  margin-right: 6px;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ══════════ MAIN LAYOUT ══════════ */
-#mainContent {
-  display: none;
-  flex: 1;
-  overflow: hidden;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 10px;
-  padding: 10px;
-}
-
-/* ── LEFT: IMAGE PANEL ── */
-#imgPanel {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-#imgPanel.hidden { display: none; }
-
-/* ── RIGHT COLUMN ── */
-.right-col {
-  width: 288px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow: hidden;
-}
-
-#mainContent.img-hidden { justify-content: center; }
-#mainContent.img-hidden .right-col { width: 360px; }
-
-/* ── PANEL BASE ── */
-.panel {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.panel-head {
-  flex-shrink: 0;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text2);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.ph-badge {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 7px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text2);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-/* IMAGE CANVAS */
-#canvasWrap {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  background: #0a0a0a;
-  padding: 6px;
-}
-#canvasWrap::-webkit-scrollbar        { width: 5px; height: 5px; }
-#canvasWrap::-webkit-scrollbar-track  { background: #0a0a0a; }
-#canvasWrap::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }
-#mainCanvas { display: block; border-radius: 3px; }
-
-/* ZOOM PANEL */
-.zoom-panel {
-  flex: 1;
-  min-height: 110px;
-  display: flex;
-  flex-direction: column;
-}
-.zoom-body {
-  flex: 1;
-  background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-}
-#zoomCanvas { display: block; border-radius: 3px; }
-
-/* STATUS PANEL */
-.irow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-.irow:last-child { border-bottom: none; }
-.ik { color: var(--text2); }
-.iv { font-weight: 500; }
-.chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-.chip-dim { background: var(--bg2); color: var(--text2); border: 1px solid var(--border); }
-
-/* LABEL BUTTONS */
-.label-list { padding: 7px; display: flex; flex-direction: column; gap: 5px; }
-.lbtn {
-  padding: 8px 11px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg2);
-  color: var(--text);
-  transition: all .15s;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.lbtn:hover { background: var(--bg); }
-.ldot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.lkey {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--text2);
-  background: var(--border);
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-family: monospace;
-}
-
-.lbtn[data-l="steatosis"]         .ldot { background: var(--red);    }
-.lbtn[data-l="mesenchymal_cells"] .ldot { background: var(--blue);   }
-.lbtn[data-l="normal"]            .ldot { background: var(--green);  }
-.lbtn[data-l="non_nuclear"]       .ldot { background: var(--yellow); }
-.lbtn[data-l="balloon_dystrophy"] .ldot { background: var(--purple); }
-
-.lbtn[data-l="steatosis"].active         { background:rgba(248,81,73,.13);  border-color:var(--red);    color:var(--red);    }
-.lbtn[data-l="mesenchymal_cells"].active { background:rgba(88,166,255,.13); border-color:var(--blue);   color:var(--blue);   }
-.lbtn[data-l="normal"].active            { background:rgba(63,185,80,.13);  border-color:var(--green);  color:var(--green);  }
-.lbtn[data-l="non_nuclear"].active       { background:rgba(210,153,34,.13); border-color:var(--yellow); color:var(--yellow); }
-.lbtn[data-l="balloon_dystrophy"].active { background:rgba(188,140,255,.13);border-color:var(--purple); color:var(--purple); }
-
-/* ── NAV ── */
-.nav-block {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-/* row 1: prev / counter / next */
-.nav-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.btn-nav {
-  flex: 1;
-  padding: 7px 4px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg3);
-  color: var(--text);
-  transition: all .2s;
-  text-align: center;
-}
-.btn-nav:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
-.btn-nav:disabled { opacity: .35; cursor: not-allowed; }
-.nav-count {
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text2);
-  padding: 0 4px;
-  white-space: nowrap;
-}
-.nav-count strong { color: var(--text); font-size: 15px; }
-
-/* row 2: jump to last + go to №  */
-.nav-row2 {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.btn-last {
-  flex: 1;
-  padding: 6px 6px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg3);
-  color: var(--text2);
-  transition: all .2s;
-  text-align: center;
-  white-space: nowrap;
-}
-.btn-last:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
-.btn-last:disabled { opacity: .35; cursor: not-allowed; }
-
-/* jump-to-cell input group */
-.jump-group {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-}
-.jump-group input[type=number] {
-  width: 52px;
-  padding: 5px 7px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
-  text-align: center;
-  transition: border-color .2s;
-  -moz-appearance: textfield;
-}
-.jump-group input[type=number]::-webkit-inner-spin-button,
-.jump-group input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
-.jump-group input[type=number]:focus { border-color: var(--blue); }
-.btn-jump {
-  padding: 5px 9px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg3);
-  color: var(--text2);
-  transition: all .2s;
-}
-.btn-jump:hover { border-color: var(--blue); color: var(--blue); }
-
-/* ── CELL LIST MODAL ── */
-#listModal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.65);
-  z-index: 200;
-  align-items: center;
-  justify-content: center;
-}
-#listModal.open { display: flex; }
-.modal-box {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  width: 440px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0,0,0,.8);
-  overflow: hidden;
-}
-.modal-head {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-.modal-head h3 { font-size: 14px; font-weight: 700; }
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--text2);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color .15s;
-}
-.modal-close:hover { color: var(--text); }
-.modal-search {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.modal-search input {
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .2s;
-}
-.modal-search input:focus { border-color: var(--blue); }
-.modal-list {
-  overflow-y: auto;
-  flex: 1;
-}
-.modal-list::-webkit-scrollbar       { width: 4px; }
-.modal-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-.cell-item {
-  display: flex;
-  align-items: center;
-  padding: 9px 16px;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background .15s;
-  font-size: 13px;
-}
-.cell-item:last-child { border-bottom: none; }
-.cell-item:hover { background: var(--bg2); }
-.cell-item.current { background: rgba(88,166,255,.08); }
-.ci-num {
-  width: 36px;
-  color: var(--text2);
-  font-size: 11px;
-  flex-shrink: 0;
-  text-align: right;
-}
-.ci-label { flex: 1; font-size: 12px; color: var(--text2); }
-.ci-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-}
-.ci-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* TOAST */
-.toast {
-  position: fixed;
-  bottom: 14px;
-  right: 14px;
-  padding: 9px 14px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.55);
-  z-index: 999;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity .25s, transform .25s;
-  pointer-events: none;
-  max-width: 280px;
-}
-.toast.show { opacity: 1; transform: translateY(0); }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cell Validator</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<!-- ══════════════════════ LOGIN ══════════════════════ -->
-<div id="loginScreen">
-  <div class="login-card">
-    <div class="logo">🔬</div>
-    <h1>Cell Validator</h1>
-    <p class="sub">Инструмент валидации разметки LabelMe</p>
-    <div class="field">
-      <label>Имя валидатора</label>
-      <input id="nameInput" type="text" placeholder="Введите ваше имя…"
-             onkeydown="if(event.key==='Enter') login()">
-    </div>
-    <button class="btn-primary" onclick="login()">Начать работу →</button>
-  </div>
-</div>
+  <!-- LOGIN -->
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="logo">🔬</div>
+      <h1>Cell Validator</h1>
+      <p class="sub">Инструмент валидации разметки LabelMe</p>
 
-<!-- ══════════════════════ APP ══════════════════════ -->
-<div id="appScreen">
-
-  <header class="header">
-    <div style="display:flex;align-items:center;">
-      <div class="header-logo">🔬 Cell Validator</div>
-      <div class="vbadge">Валидатор: <b id="vName">—</b></div>
-    </div>
-    <div class="header-right">
-      <button class="btn-icon" id="btnToggleImg" onclick="toggleImage()">🖼 Скрыть изображение</button>
-      <label  class="btn-icon" for="jsonFileInput">📂 Загрузить JSON</label>
-      <input  type="file" id="jsonFileInput" accept=".json" onchange="loadFile(event)">
-      <button class="btn-icon green" onclick="exportXLSX()">📊 Экспорт Excel</button>
-      <button class="btn-icon" id="btnBack" onclick="backToUpload()" style="display:none;">← Назад</button>
-    </div>
-  </header>
-
-  <div class="prog-wrap" id="progWrap">
-    <div class="prog-meta">
-      <span id="fileInfo">—</span>
-      <span id="progText">0 / 0</span>
-    </div>
-    <div class="prog-track"><div class="prog-fill" id="pFill" style="width:0%"></div></div>
-  </div>
-
-  <div id="uploadArea">
-    <div class="upload-box"
-         onclick="document.getElementById('jsonFileInput').click()"
-         ondragover="event.preventDefault(); this.classList.add('over')"
-         ondragleave="this.classList.remove('over')"
-         ondrop="handleDrop(event)">
-      <div class="uico">📂</div>
-      <h2>Загрузите LabelMe JSON</h2>
-      <p>Перетащите файл сюда или нажмите кнопку ниже.<br>
-         Файл должен содержать поле <code>imageData</code> (base64).</p>
-
-      <div id="fileListContainer" class="file-list" style="display:none;">
-        <h3>📋 Доступные файлы:</h3>
-        <div class="file-items" id="fileListItems"></div>
+      <div class="field">
+        <label>Имя валидатора</label>
+        <input id="nameInput" type="text" placeholder="Введите ваше имя…" />
       </div>
 
-      <hr>
-
-      <button class="btn-upload"
-              onclick="event.stopPropagation(); document.getElementById('jsonFileInput').click()">
-        Выбрать файл
-      </button>
+      <button class="btn-primary" id="btnLogin">Начать работу →</button>
     </div>
   </div>
 
-  <div id="mainContent">
-
-    <!-- LEFT: full image -->
-    <div id="imgPanel">
-      <div class="panel-head">
-        Полное изображение
-        <span class="ph-badge" id="shapeTypeBadge">—</span>
+  <!-- APP -->
+  <div id="appScreen">
+    <header class="header">
+      <div class="header-left">
+        <div class="header-logo">🔬 Cell Validator</div>
+        <div class="vbadge">Валидатор: <b id="vName">—</b></div>
       </div>
-      <div id="canvasWrap">
-        <canvas id="mainCanvas"></canvas>
+
+      <div class="header-right">
+        <button class="btn-icon" id="btnToggleImg">🖼 Скрыть изображение</button>
+
+        <label class="btn-icon" for="jsonFileInput">📂 Загрузить JSON</label>
+        <input type="file" id="jsonFileInput" accept=".json" />
+
+        <label class="btn-icon" for="folderInput">📁 Папка annotations</label>
+        <input type="file" id="folderInput" webkitdirectory directory multiple accept=".json" />
+
+        <button class="btn-icon green" id="btnExport">📊 Экспорт Excel</button>
+        <button class="btn-icon" id="btnBack">← Назад</button>
+      </div>
+    </header>
+
+    <div class="prog-wrap" id="progWrap">
+      <div class="prog-meta">
+        <span id="fileInfo">—</span>
+        <span id="progText">0 / 0</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" id="pFill"></div></div>
+    </div>
+
+    <div id="uploadArea">
+      <div class="upload-box" id="uploadBox">
+        <div class="uico">📂</div>
+        <h2>Загрузите LabelMe JSON</h2>
+        <p>
+          Перетащите файл сюда или нажмите кнопку выше.<br>
+          Для автосписка с сервера используйте папку <code>annotations/</code>.
+        </p>
+
+        <div id="fileListContainer" class="file-list">
+          <h3>📋 Доступные файлы:</h3>
+          <div class="file-items" id="fileListItems"></div>
+        </div>
       </div>
     </div>
 
-    <!-- RIGHT column -->
-    <div class="right-col">
-
-      <!-- Zoom / cell view -->
-      <div class="panel zoom-panel">
+    <div id="mainContent">
+      <div id="imgPanel">
         <div class="panel-head">
-          <span>Клетка&nbsp;<b id="iIdx" style="color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;">—</b></span>
-          <span class="ph-badge" id="iType">—</span>
+          Полное изображение
+          <span class="ph-badge" id="shapeTypeBadge">—</span>
         </div>
-        <div class="zoom-body" id="zoomBody">
-          <canvas id="zoomCanvas"></canvas>
-        </div>
-      </div>
-
-      <!-- Status -->
-      <div class="panel">
-        <div class="panel-head">Статус</div>
-        <div class="irow">
-          <span class="ik">Ваша метка</span>
-          <span id="iVal"><span class="chip chip-dim">не задана</span></span>
+        <div id="canvasWrap">
+          <canvas id="mainCanvas"></canvas>
         </div>
       </div>
 
-      <!-- Label buttons -->
-      <div class="panel">
-        <div class="panel-head">Назначить метку</div>
-        <div class="label-list">
-          <button class="lbtn" data-l="steatosis"         onclick="setLabel('steatosis')">
-            <span class="ldot"></span>Steatosis          <span class="lkey">1</span>
-          </button>
-          <button class="lbtn" data-l="mesenchymal_cells" onclick="setLabel('mesenchymal_cells')">
-            <span class="ldot"></span>Mesenchymal Cells  <span class="lkey">2</span>
-          </button>
-          <button class="lbtn" data-l="normal"            onclick="setLabel('normal')">
-            <span class="ldot"></span>Normal             <span class="lkey">3</span>
-          </button>
-          <button class="lbtn" data-l="non_nuclear"       onclick="setLabel('non_nuclear')">
-            <span class="ldot"></span>Non Nuclear        <span class="lkey">4</span>
-          </button>
-          <button class="lbtn" data-l="balloon_dystrophy" onclick="setLabel('balloon_dystrophy')">
-            <span class="ldot"></span>Balloon Dystrophy  <span class="lkey">5</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Navigation -->
-      <div class="nav-block">
-        <!-- row 1: prev / count / next -->
-        <div class="nav-row">
-          <button class="btn-nav" id="btnPrev" onclick="navigate(-1)">← Пред.</button>
-          <div class="nav-count">
-            <strong id="navCur">1</strong>&thinsp;/&thinsp;<span id="navTotal">0</span>
+      <div class="right-col">
+        <div class="panel zoom-panel">
+          <div class="panel-head">
+            <span>Клетка <b id="iIdx">—</b></span>
+            <span class="ph-badge" id="iType">—</span>
           </div>
-          <button class="btn-nav" id="btnNext" onclick="navigate(1)">След. →</button>
+          <div class="zoom-body" id="zoomBody">
+            <canvas id="zoomCanvas"></canvas>
+          </div>
         </div>
-        <!-- row 2: jump to last + go-to input -->
-        <div class="nav-row2">
-          <button class="btn-last" id="btnLast" onclick="goToLast()" disabled>⏭ К последней</button>
-          <div class="jump-group">
-            <input type="number" id="jumpInput" min="1" placeholder="№"
-                   onkeydown="if(event.key==='Enter') jumpTo()"
-                   onclick="this.select()">
-            <button class="btn-jump" onclick="jumpTo()" title="Перейти к клетке">→</button>
-            <button class="btn-jump" onclick="openList()" title="Список клеток">☰</button>
+
+        <div class="panel">
+          <div class="panel-head">Статус</div>
+          <div class="irow">
+            <span class="ik">Ваша метка</span>
+            <span id="iVal"><span class="chip chip-dim">не задана</span></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">Назначить метку</div>
+          <div class="label-list">
+            <button class="lbtn" data-l="steatosis">Steatosis <span class="lkey">1</span></button>
+            <button class="lbtn" data-l="mesenchymal_cells">Mesenchymal Cells <span class="lkey">2</span></button>
+            <button class="lbtn" data-l="normal">Normal <span class="lkey">3</span></button>
+            <button class="lbtn" data-l="non_nuclear">Non Nuclear <span class="lkey">4</span></button>
+            <button class="lbtn" data-l="balloon_dystrophy">Balloon Dystrophy <span class="lkey">5</span></button>
+          </div>
+        </div>
+
+        <div class="nav-block">
+          <div class="nav-row">
+            <button class="btn-nav" id="btnPrev">← Пред.</button>
+            <div class="nav-count"><strong id="navCur">1</strong> / <span id="navTotal">0</span></div>
+            <button class="btn-nav" id="btnNext">След. →</button>
+          </div>
+          <div class="nav-row2">
+            <button class="btn-last" id="btnLast">⏭ К последней</button>
+            <div class="jump-group">
+              <input type="number" id="jumpInput" min="1" placeholder="№" />
+              <button class="btn-jump" id="btnJump">→</button>
+              <button class="btn-jump" id="btnOpenList">☰</button>
+            </div>
           </div>
         </div>
       </div>
-
-    </div><!-- /right-col -->
-  </div><!-- /mainContent -->
-
-</div><!-- /appScreen -->
-
-<!-- ══════════ CELL LIST MODAL ══════════ -->
-<div id="listModal" onclick="if(event.target===this) closeList()">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h3>Список клеток</h3>
-      <button class="modal-close" onclick="closeList()">✕</button>
     </div>
-    <div class="modal-search">
-      <input type="text" id="listSearch" placeholder="Поиск по метке или номеру…"
-             oninput="renderList()" onkeydown="if(event.key==='Escape') closeList()">
-    </div>
-    <div class="modal-list" id="modalList"></div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
+  <!-- MODAL -->
+  <div id="listModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Список клеток</h3>
+        <button class="modal-close" id="btnCloseList">✕</button>
+      </div>
+      <div class="modal-search">
+        <input type="text" id="listSearch" placeholder="Поиск по метке или номеру…" />
+      </div>
+      <div class="modal-list" id="modalList"></div>
+    </div>
+  </div>
 
-<!-- ══════════════════════ SCRIPT ══════════════════════ -->
-<script>
-/* ─── STATE ─── */
-let userName = '';
-let jData    = null;
-let idx      = 0;
-let vals     = {};
-let showImg  = true;
-let availableFiles = [];
-const img    = new Image();
+  <div class="toast" id="toast"></div>
 
-const LC = {
-  steatosis:         '#f85149',
-  mesenchymal_cells: '#58a6ff',
-  normal:            '#3fb950',
-  non_nuclear:       '#d29922',
-  balloon_dystrophy: '#bc8cff',
-};
-
-/* ─── LOGIN ─── */
-function login() {
-  const n = document.getElementById('nameInput').value.trim();
-  if (!n) { document.getElementById('nameInput').classList.add('err'); return; }
-  userName = n;
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appScreen').style.display   = 'flex';
-  document.getElementById('vName').textContent = n;
-  loadFileList();
-  try {
-    const s = localStorage.getItem('cv_' + n);
-    if (s) { vals = JSON.parse(s).vals || {}; toast('Восстановлено ' + Object.keys(vals).length + ' меток'); }
-  } catch(e) {}
-}
-
-/* ─── LOAD FILE LIST ─── */
-async function loadFileList() {
-  try {
-    const response = await fetch('annotations/');
-    if (!response.ok) {
-      console.warn('Папка annotations не найдена');
-      return;
-    }
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const links = doc.querySelectorAll('a');
-    availableFiles = [];
-
-    links.forEach(link => {
-      const href = link.getAttribute('href');
-      if (href && href.endsWith('.json') && !href.startsWith('?')) {
-        availableFiles.push({
-          name: href,
-          displayName: href.split('/').pop()
-        });
-      }
-    });
-
-    if (availableFiles.length > 0) {
-      renderFileList();
-    }
-  } catch(e) {
-    console.warn('Ошибка загрузки списка файлов:', e);
-  }
-}
-
-/* ─── RENDER FILE LIST ─── */
-function renderFileList() {
-  const container = document.getElementById('fileListContainer');
-  const itemsDiv = document.getElementById('fileListItems');
-
-  if (availableFiles.length === 0) {
-    container.style.display = 'none';
-    return;
-  }
-
-  container.style.display = 'block';
-  itemsDiv.innerHTML = '';
-
-  availableFiles.forEach(file => {
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    item.textContent = file.displayName;
-    item.onclick = () => loadAnnotationFile(file.name);
-    item.title = file.name;
-    itemsDiv.appendChild(item);
-  });
-}
-
-/* ─── LOAD ANNOTATION FILE ─── */
-async function loadAnnotationFile(fileName) {
-  const item = event.target;
-  item.classList.add('loading');
-  item.innerHTML = '<span class="loading-spinner"></span>' + item.textContent;
-
-  try {
-    const response = await fetch('annotations/' + fileName);
-    if (!response.ok) throw new Error('Файл не найден');
-    const data = await response.json();
-    jData = data;
-    idx = 0;
-
-    const ext  = (data.imagePath || 'img.jpg').split('.').pop().toLowerCase();
-    const mime = { jpg:'jpeg', jpeg:'jpeg', png:'png', bmp:'bmp', gif:'gif' }[ext] || 'jpeg';
-
-    if (data.imageData) {
-      img.onload  = () => initViewer(fileName);
-      img.onerror = () => { toast('Ошибка загрузки imageData'); initViewer(fileName); };
-      img.src = data.imageData.startsWith('data:')
-        ? data.imageData
-        : `data:image/${mime};base64,${data.imageData}`;
-    } else {
-      img.src = '';
-      toast('Поле imageData отсутствует — только контуры');
-      initViewer(fileName);
-    }
-  } catch(err) {
-    item.classList.remove('loading');
-    item.innerHTML = item.textContent;
-    toast('Ошибка: ' + err.message);
-  }
-}
-
-/* ─── FILE LOADING (MANUAL) ─── */
-function handleDrop(e) {
-  e.preventDefault();
-  document.querySelector('.upload-box').classList.remove('over');
-  const f = e.dataTransfer.files[0];
-  if (f && f.name.endsWith('.json')) readJson(f);
-  else toast('Нужен .json файл');
-}
-
-function loadFile(e) {
-  const f = e.target.files[0];
-  if (f) readJson(f);
-  e.target.value = '';
-}
-
-function readJson(file) {
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.shapes) { toast('Ошибка: нет поля shapes'); return; }
-      jData = data;
-      idx   = 0;
-      const ext  = (data.imagePath || 'img.jpg').split('.').pop().toLowerCase();
-      const mime = { jpg:'jpeg', jpeg:'jpeg', png:'png', bmp:'bmp', gif:'gif' }[ext] || 'jpeg';
-      if (data.imageData) {
-        img.onload  = () => initViewer(file.name);
-        img.onerror = () => { toast('Ошибка загрузки imageData'); initViewer(file.name); };
-        img.src = data.imageData.startsWith('data:')
-          ? data.imageData
-          : `data:image/${mime};base64,${data.imageData}`;
-      } else {
-        img.src = '';
-        toast('Поле imageData отсутствует — только контуры');
-        initViewer(file.name);
-      }
-    } catch(err) { toast('Ошибка парсинга: ' + err.message); }
-  };
-  reader.readAsText(file);
-}
-
-function initViewer(fileName) {
-  document.getElementById('uploadArea').style.display  = 'none';
-  document.getElementById('mainContent').style.display = 'flex';
-  document.getElementById('progWrap').style.display    = 'block';
-  document.getElementById('btnBack').style.display     = 'flex';
-  const n  = jData.shapes.length;
-  const iw = jData.imageWidth  || img.naturalWidth  || '?';
-  const ih = jData.imageHeight || img.naturalHeight || '?';
-  document.getElementById('navTotal').textContent = n;
-  document.getElementById('jumpInput').max        = n;
-  document.getElementById('fileInfo').textContent = `${fileName} · ${n} кл. · ${iw}×${ih}`;
-  updateUI();
-}
-
-/* ─── BACK TO UPLOAD ─── */
-function backToUpload() {
-  jData = null;
-  idx = 0;
-  document.getElementById('uploadArea').style.display  = 'flex';
-  document.getElementById('mainContent').style.display = 'none';
-  document.getElementById('progWrap').style.display    = 'none';
-  document.getElementById('btnBack').style.display     = 'none';
-  document.getElementById('navCur').textContent = '1';
-}
-
-/* ─── TOGGLE IMAGE ─── */
-function toggleImage() {
-  showImg = !showImg;
-  document.getElementById('imgPanel').classList.toggle('hidden', !showImg);
-  document.getElementById('mainContent').classList.toggle('img-hidden', !showImg);
-  const btn = document.getElementById('btnToggleImg');
-  btn.textContent = showImg ? '🖼 Скрыть изображение' : '🖼 Показать изображение';
-  btn.classList.toggle('toggled', !showImg);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    if (jData) { drawMain(jData.shapes[idx]); drawZoom(jData.shapes[idx]); }
-  }));
-}
-
-/* ─── UPDATE UI ─── */
-function updateUI() {
-  if (!jData) return;
-  const shape   = jData.shapes[idx];
-  const total   = jData.shapes.length;
-  const labeled = Object.keys(vals).length;
-  const v       = vals[idx];
-
-  document.getElementById('navCur').textContent  = idx + 1;
-  document.getElementById('btnPrev').disabled    = idx === 0;
-  document.getElementById('btnNext').disabled    = idx === total - 1;
-
-  const pct = total > 0 ? (labeled / total * 100).toFixed(1) : 0;
-  document.getElementById('pFill').style.width    = pct + '%';
-  document.getElementById('progText').textContent = `${labeled} / ${total} (${pct}%)`;
-
-  document.getElementById('iIdx').textContent           = '#' + (idx + 1);
-  document.getElementById('iType').textContent          = shape.shape_type  || 'polygon';
-  document.getElementById('shapeTypeBadge').textContent = shape.shape_type  || 'polygon';
-
-  /* "К последней" button */
-  const lastIdx = lastLabeledIdx();
-  const btnLast = document.getElementById('btnLast');
-  btnLast.disabled    = lastIdx === null;
-  btnLast.textContent = lastIdx !== null
-    ? `⏭ К последней (#${lastIdx + 1})`
-    : '⏭ К последней';
-
-  if (v) {
-    const col = LC[v.valLabel] || '#aaa';
-    document.getElementById('iVal').innerHTML =
-      `<span class="chip" style="background:${col}22;color:${col};border:1px solid ${col}44">${v.valLabel}</span>`;
-  } else {
-    document.getElementById('iVal').innerHTML = `<span class="chip chip-dim">не задана</span>`;
-  }
-
-  updateBtns(v ? v.valLabel : null);
-  drawMain(shape);
-  drawZoom(shape);
-  save();
-}
-
-/* ─── DRAW: FULL IMAGE ─── */
-function drawMain(shape) {
-  if (!showImg) return;
-  const canvas = document.getElementById('mainCanvas');
-  const ctx    = canvas.getContext('2d');
-  const wrap   = document.getElementById('canvasWrap');
-  const maxW   = Math.max(wrap.clientWidth  - 12, 100);
-  const maxH   = Math.max(wrap.clientHeight - 12, 100);
-  const iW     = img.naturalWidth  || jData.imageWidth  || 800;
-  const iH     = img.naturalHeight || jData.imageHeight || 600;
-  const sc     = Math.min(maxW / iW, maxH / iH, 3);
-  canvas.width  = Math.round(iW * sc);
-  canvas.height = Math.round(iH * sc);
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (img.naturalWidth && img.complete)
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  jData.shapes.forEach((s, i) => {
-    if (i === idx) return;
-    poly(ctx, s.points, s.shape_type, sc, 'rgba(255,255,255,.2)', 'rgba(255,255,255,.03)', 1);
-  });
-  const col = LC[vals[idx]?.valLabel] || '#ff6b6b';
-  poly(ctx, shape.points, shape.shape_type, sc, col, hexA(col, .18), 2.5);
-}
-
-/* ─── DRAW: ZOOM ─── */
-function drawZoom(shape) {
-  const canvas = document.getElementById('zoomCanvas');
-  const ctx    = canvas.getContext('2d');
-  const body   = document.getElementById('zoomBody');
-  const W      = Math.max(body.clientWidth  - 12, 80);
-  const H      = Math.max(body.clientHeight - 12, 60);
-  canvas.width  = W;
-  canvas.height = H;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
-  if (!img.naturalWidth || !img.complete || !shape?.points?.length) return;
-  const pts = shape.points;
-  const xs  = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  const mnX = Math.min(...xs), mxX = Math.max(...xs);
-  const mnY = Math.min(...ys), mxY = Math.max(...ys);
-  const pad = Math.max(mxX - mnX, mxY - mnY) * .5 + 14;
-  const sX  = Math.max(0, mnX - pad);
-  const sY  = Math.max(0, mnY - pad);
-  const sW  = Math.min(img.naturalWidth  - sX, mxX - mnX + 2 * pad);
-  const sH  = Math.min(img.naturalHeight - sY, mxY - mnY + 2 * pad);
-  if (sW <= 0 || sH <= 0) return;
-  const sc = Math.min(W / sW, H / sH);
-  const dW = sW * sc, dH = sH * sc;
-  const dX = (W - dW) / 2, dY = (H - dH) / 2;
-  ctx.drawImage(img, sX, sY, sW, sH, dX, dY, dW, dH);
-  const tp  = pts.map(p => [dX + (p[0] - sX) * sc, dY + (p[1] - sY) * sc]);
-  const col = LC[vals[idx]?.valLabel] || '#ff6b6b';
-  poly(ctx, tp, shape.shape_type, 1, col, hexA(col, .2), 2);
-}
-
-/* ─── DRAW HELPER ─── */
-function poly(ctx, points, type, sc, stroke, fill, lw) {
-  if (!points?.length) return;
-  ctx.beginPath();
-  if (type === 'rectangle' && points.length >= 2) {
-    ctx.rect(
-      points[0][0] * sc, points[0][1] * sc,
-      (points[1][0] - points[0][0]) * sc,
-      (points[1][1] - points[0][1]) * sc
-    );
-  } else if (type === 'circle' && points.length >= 2) {
-    const r = Math.hypot(
-      (points[1][0] - points[0][0]) * sc,
-      (points[1][1] - points[0][1]) * sc
-    );
-    ctx.arc(points[0][0] * sc, points[0][1] * sc, r, 0, Math.PI * 2);
-  } else {
-    ctx.moveTo(points[0][0] * sc, points[0][1] * sc);
-    for (let i = 1; i < points.length; i++)
-      ctx.lineTo(points[i][0] * sc, points[i][1] * sc);
-    ctx.closePath();
-  }
-  ctx.fillStyle   = fill;   ctx.fill();
-  ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
-}
-
-function hexA(hex, a) {
-  hex = hex.replace('#','');
-  return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;
-}
-
-/* ─── LABELS ─── */
-function setLabel(val) {
-  if (!jData) return;
-  const shape = jData.shapes[idx];
-  vals[idx] = {
-    origLabel: shape.label || '',
-    points:    shape.points,
-    shapeType: shape.shape_type || 'polygon',
-    valLabel:  val,
-  };
-  updateUI();
-  toast('✓ ' + val);
-  if (idx < jData.shapes.length - 1)
-    setTimeout(() => { idx++; updateUI(); }, 280);
-}
-
-function updateBtns(active) {
-  document.querySelectorAll('.lbtn').forEach(b =>
-    b.classList.toggle('active', b.dataset.l === active)
-  );
-}
-
-/* ─── NAVIGATION ─── */
-function navigate(d) {
-  if (!jData) return;
-  const ni = idx + d;
-  if (ni < 0 || ni >= jData.shapes.length) return;
-  idx = ni;
-  updateUI();
-}
-
-function lastLabeledIdx() {
-  const keys = Object.keys(vals).map(Number);
-  return keys.length ? Math.max(...keys) : null;
-}
-
-function goToLast() {
-  const li = lastLabeledIdx();
-  if (li === null) { toast('Нет размеченных клеток'); return; }
-  idx = li;
-  updateUI();
-  toast(`Переход к клетке #${li + 1}`);
-}
-
-function jumpTo() {
-  if (!jData) return;
-  const val = parseInt(document.getElementById('jumpInput').value, 10);
-  if (isNaN(val) || val < 1 || val > jData.shapes.length) {
-    toast(`Введите номер от 1 до ${jData.shapes.length}`);
-    return;
-  }
-  idx = val - 1;
-  document.getElementById('jumpInput').value = '';
-  updateUI();
-}
-
-/* ─── CELL LIST MODAL ─── */
-function openList() {
-  if (!jData) return;
-  document.getElementById('listSearch').value = '';
-  renderList();
-  document.getElementById('listModal').classList.add('open');
-  document.getElementById('listSearch').focus();
-}
-
-function closeList() {
-  document.getElementById('listModal').classList.remove('open');
-}
-
-function renderList() {
-  const q   = document.getElementById('listSearch').value.trim().toLowerCase();
-  const ul  = document.getElementById('modalList');
-  ul.innerHTML = '';
-
-  jData.shapes.forEach((shape, i) => {
-    const v       = vals[i];
-    const vlabel  = v ? v.valLabel : '';
-    const numStr  = String(i + 1);
-
-    if (q) {
-      const match = numStr.includes(q) || vlabel.toLowerCase().includes(q)
-                 || (shape.label || '').toLowerCase().includes(q);
-      if (!match) return;
-    }
-
-    const div = document.createElement('div');
-    div.className = 'cell-item' + (i === idx ? ' current' : '');
-    div.onclick   = () => { idx = i; updateUI(); closeList(); };
-
-    const dot = document.createElement('span');
-    dot.className = 'ci-dot';
-    dot.style.background = vlabel ? LC[vlabel] : 'var(--border)';
-
-    const num = document.createElement('span');
-    num.className   = 'ci-num';
-    num.textContent = '#' + (i + 1);
-
-    const lbl = document.createElement('span');
-    lbl.className   = 'ci-label';
-    lbl.textContent = shape.label || '—';
-
-    const badge = document.createElement('span');
-    badge.className = 'ci-badge';
-    if (vlabel) {
-      const col = LC[vlabel] || '#aaa';
-      badge.textContent   = vlabel;
-      badge.style.color   = col;
-      badge.style.background   = hexA(col, .15);
-      badge.style.borderColor  = hexA(col, .4);
-    } else {
-      badge.textContent          = 'не задана';
-      badge.style.color          = 'var(--text2)';
-      badge.style.background     = 'var(--bg2)';
-      badge.style.borderColor    = 'var(--border)';
-    }
-
-    div.append(dot, num, lbl, badge);
-    ul.appendChild(div);
-  });
-
-  if (ul.children.length === 0) {
-    ul.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">Ничего не найдено</div>';
-  }
-
-  const cur = ul.querySelector('.current');
-  if (cur) cur.scrollIntoView({ block: 'center' });
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeList(); return; }
-  if (!jData) return;
-  const inInput = e.target.tagName === 'INPUT';
-  if (inInput) return;
-  const map = {
-    ArrowLeft:  () => navigate(-1),
-    ArrowRight: () => navigate(1),
-    '1': () => setLabel('steatosis'),
-    '2': () => setLabel('mesenchymal_cells'),
-    '3': () => setLabel('normal'),
-    '4': () => setLabel('non_nuclear'),
-    '5': () => setLabel('balloon_dystrophy'),
-  };
-  if (map[e.key]) { e.preventDefault(); map[e.key](); }
-});
-
-/* ─── EXPORT ─── */
-function exportXLSX() {
-  const entries = Object.entries(vals).sort((a, b) => +a[0] - +b[0]);
-  if (!entries.length) { toast('Нет данных для экспорта'); return; }
-  const rows = [['Имя валидатора','Индекс клетки','Координаты контура','Исходная метка','Метка валидатора','Тип формы']];
-  for (const [i, v] of entries) {
-    const coords = v.points
-      ? v.points.map(p => `(${(+p[0]).toFixed(1)};${(+p[1]).toFixed(1)})`).join(' | ')
-      : '—';
-    rows.push([userName, +i + 1, coords, v.origLabel || '—', v.valLabel, v.shapeType]);
-  }
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:20},{wch:14},{wch:90},{wch:22},{wch:22},{wch:14}];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Validations');
-  XLSX.writeFile(wb, `validation_${userName}_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✓ Экспортировано: ' + entries.length + ' записей');
-}
-
-/* ─── UTILS ─── */
-let _tt;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(_tt);
-  _tt = setTimeout(() => el.classList.remove('show'), 2800);
-}
-
-function save() {
-  try { localStorage.setItem('cv_' + userName, JSON.stringify({ vals, ts: Date.now() })); } catch(e) {}
-}
-
-let _rz;
-window.addEventListener('resize', () => {
-  clearTimeout(_rz);
-  _rz = setTimeout(() => { if (jData) updateUI(); }, 150);
-});
-</script>
+  <script src="app.js"></script>
 </body>
 </html>
