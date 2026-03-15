@@ -3,6 +3,7 @@ let userName = "";
 let jData = null;
 let idx = 0;
 let vals = {};
+let allValsByFile = {}; // { [fileName]: { [cellIndex]: validationObj } }
 let showImg = true;
 let availableFiles = []; // [{displayName, type:'remote'|'local', url?, file?}]
 let saveDirHandle = null;
@@ -231,6 +232,8 @@ async function openData(data, fileName) {
   // затем, если выбрана папка — прогресс из файла (приоритетнее)
   await loadProgressFromFile();
 
+  allValsByFile[currentFileName] = { ...vals };
+
   const ext = (data.imagePath || "img.jpg").split(".").pop().toLowerCase();
   const mime = MIME_BY_EXT[ext] || "jpeg";
 
@@ -447,7 +450,7 @@ function setLabel(val) {
     shapeType: shape.shape_type || "polygon",
     valLabel: val,
   };
-
+  allValsByFile[currentFileName] = { ...vals };
   updateUI();
   toast(`✓ ${val}`);
 
@@ -605,11 +608,14 @@ function onGlobalKeydown(e) {
 
 /* ===== Export ===== */
 function exportXLSX() {
-  const entries = Object.entries(vals).sort((a, b) => Number(a[0]) - Number(b[0]));
-  if (!entries.length) return toast("Нет данных для экспорта");
+  if (!userName) return toast("Сначала введите имя валидатора");
+
+  const all = collectAllProgressForUser();
+  const fileNames = Object.keys(all).sort((a, b) => a.localeCompare(b, "ru"));
 
   const rows = [[
     "Имя валидатора",
+    "Файл",
     "Индекс клетки",
     "Координаты контура",
     "Исходная метка",
@@ -617,20 +623,48 @@ function exportXLSX() {
     "Тип формы",
   ]];
 
-  for (const [i, v] of entries) {
-    const coords = (v.points || [])
-      .map((p) => `(${(+p[0]).toFixed(1)};${(+p[1]).toFixed(1)})`)
-      .join(" | ") || "—";
-    rows.push([userName, Number(i) + 1, coords, v.origLabel || "—", v.valLabel || "—", v.shapeType || "—"]);
+  let totalRows = 0;
+
+  for (const fileName of fileNames) {
+    const fileVals = all[fileName] || {};
+    const entries = Object.entries(fileVals).sort((a, b) => Number(a[0]) - Number(b[0]));
+
+    for (const [i, v] of entries) {
+      const coords = (v.points || [])
+        .map((p) => `(${(+p[0]).toFixed(1)};${(+p[1]).toFixed(1)})`)
+        .join(" | ") || "—";
+
+      rows.push([
+        userName,
+        fileName,
+        Number(i) + 1,
+        coords,
+        v.origLabel || "—",
+        v.valLabel || "—",
+        v.shapeType || "—",
+      ]);
+      totalRows++;
+    }
   }
 
+  if (!totalRows) return toast("Нет данных для экспорта");
+
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 90 }, { wch: 24 }, { wch: 24 }, { wch: 14 }];
+  ws["!cols"] = [
+    { wch: 20 }, // Имя валидатора
+    { wch: 32 }, // Файл
+    { wch: 14 }, // Индекс клетки
+    { wch: 90 }, // Координаты
+    { wch: 24 }, // Исходная метка
+    { wch: 24 }, // Метка валидатора
+    { wch: 14 }, // Тип формы
+  ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Validations");
   XLSX.writeFile(wb, `validation_${userName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  toast(`✓ Экспортировано: ${entries.length}`);
+
+  toast(`✓ Экспортировано записей: ${totalRows} (файлов: ${fileNames.length})`);
 }
 
 /* ===== Utils ===== */
@@ -649,6 +683,8 @@ function lsKey() {
 
 function save() {
   if (!userName) return;
+
+  allValsByFile[currentFileName] = { ...vals };
 
   try {
     localStorage.setItem(lsKey(), JSON.stringify({ vals, ts: Date.now() }));
@@ -732,9 +768,38 @@ async function loadProgressFromFile() {
 
     if (parsed && parsed.vals && typeof parsed.vals === "object") {
       vals = parsed.vals;
+      allValsByFile[currentFileName] = { ...vals };
       toast(`Загружен прогресс из файла: ${Object.keys(vals).length}`);
     }
   } catch {
     // файла ещё нет — это нормально
   }
+}
+
+function collectAllProgressForUser() {
+  const result = {};
+
+  // 1) Что уже в памяти в текущей сессии
+  for (const [fileName, fileVals] of Object.entries(allValsByFile)) {
+    if (fileVals && Object.keys(fileVals).length) {
+      result[fileName] = { ...fileVals };
+    }
+  }
+
+  // 2) Что сохранено пофайлово в localStorage
+  const prefix = `cv_${userName}__`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(prefix)) continue;
+
+    const fileName = k.slice(prefix.length) || "no_file";
+    try {
+      const parsed = JSON.parse(localStorage.getItem(k));
+      if (parsed?.vals && typeof parsed.vals === "object") {
+        result[fileName] = { ...(result[fileName] || {}), ...parsed.vals };
+      }
+    } catch (_) {}
+  }
+
+  return result;
 }
