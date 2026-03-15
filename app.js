@@ -63,6 +63,10 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", debounce(() => jData && updateUI(), 120));
 
   $("btnPickSaveDir").addEventListener("click", pickSaveDir);
+
+  $("btnOpenInstr").addEventListener("click", () => {
+    window.open("instruction.html", "_blank");
+  });
 });
 
 /* ===== Login ===== */
