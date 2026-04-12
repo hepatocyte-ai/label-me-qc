@@ -230,6 +230,7 @@ body{
   min-height:0;     /* allow flex child to shrink below content size */
   background:#000;
   position:relative;
+  overflow: hidden;
 }
 #zoomCanvas{
   position:absolute;

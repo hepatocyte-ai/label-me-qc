@@ -358,7 +358,6 @@ function drawZoom(shape) {
   const ctx = canvas.getContext("2d");
   const body = $("zoomBody");
 
-  // body size is stable because canvas is absolutely positioned (out of flow)
   const W = body.clientWidth;
   const H = body.clientHeight;
   if (W < 10 || H < 10) return;
@@ -367,44 +366,78 @@ function drawZoom(shape) {
   const pw = Math.round(W * dpr);
   const ph = Math.round(H * dpr);
 
-  // Resize pixel buffer only when dimensions actually change
   if (canvas.width !== pw || canvas.height !== ph) {
     canvas.width = pw;
     canvas.height = ph;
   }
 
-  // Reset transform to prevent accumulation between redraws
+  // Очищаем canvas
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, pw, ph);
-  // Scale subsequent drawing commands from CSS-pixel space to device-pixel space
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   if (!img.naturalWidth || !img.complete || !shape?.points?.length) return;
 
   const pts = shape.points;
-  const xs = pts.map((p) => p[0]);
-  const ys = pts.map((p) => p[1]);
-
+  const xs = pts.map(p => p[0]);
+  const ys = pts.map(p => p[1]);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
 
-  const pad = 512;
-  const sx = Math.max(0, minX - pad);
-  const sy = Math.max(0, minY - pad);
-  const sw = Math.min(img.naturalWidth - sx, maxX - minX + 2 * pad);
-  const sh = Math.min(img.naturalHeight - sy, maxY - minY + 2 * pad);
-  if (sw <= 0 || sh <= 0) return;
+  const boxW = maxX - minX;
+  const boxH = maxY - minY;
+  const pad = Math.min(800, Math.max(100, Math.max(boxW, boxH) * 0.2));
 
-  const sc = Math.min(W / sw, H / sh);
-  const dw = sw * sc, dh = sh * sc;
-  const dx = (W - dw) / 2, dy = (H - dh) / 2;
+  // Центр клетки
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
 
-  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  // Целевая область (виртуальная, может выходить за пределы изображения)
+  const targetW = boxW + 2 * pad;
+  const targetH = boxH + 2 * pad;
+  const targetLeft = centerX - targetW / 2;
+  const targetTop = centerY - targetH / 2;
 
-  const tpts = pts.map((p) => [dx + (p[0] - sx) * sc, dy + (p[1] - sy) * sc]);
+  // Внутренние отступы canvas
+  const MARGIN = 20;
+  const availW = W - 2 * MARGIN;
+  const availH = H - 2 * MARGIN;
+
+  // Масштаб для вписывания целевой области
+  const scale = Math.min(availW / targetW, availH / targetH);
+  const dw = targetW * scale;
+  const dh = targetH * scale;
+  const dx = MARGIN + (availW - dw) / 2;
+  const dy = MARGIN + (availH - dh) / 2;
+
+  // Пересечение целевой области с реальным изображением
+  const srcLeft = Math.max(targetLeft, 0);
+  const srcTop = Math.max(targetTop, 0);
+  const srcRight = Math.min(targetLeft + targetW, img.naturalWidth);
+  const srcBottom = Math.min(targetTop + targetH, img.naturalHeight);
+  const srcW = srcRight - srcLeft;
+  const srcH = srcBottom - srcTop;
+
+  if (srcW > 0 && srcH > 0) {
+    // Вычисляем, в каком месте canvas будет нарисован этот фрагмент
+    const offsetX = (srcLeft - targetLeft) * scale;
+    const offsetY = (srcTop - targetTop) * scale;
+    ctx.drawImage(
+      img,
+      srcLeft, srcTop, srcW, srcH,
+      dx + offsetX, dy + offsetY, srcW * scale, srcH * scale
+    );
+  }
+
+  // Отрисовка контура
+  const tpts = pts.map(p => [
+    dx + (p[0] - targetLeft) * scale,
+    dy + (p[1] - targetTop) * scale
+  ]);
+
   const col = LC[vals[idx]?.valLabel] || "#ff6b6b";
   drawShape(ctx, tpts, shape.shape_type, 1, col, hexA(col, 0.2), 2);
 }
