@@ -216,7 +216,27 @@ body{
   overflow:auto;
   padding:8px;
 }
-#mainCanvas,#zoomCanvas{display:block;border-radius:4px}
+#mainCanvas{display:block;border-radius:4px}
+
+/*
+ * BUG FIX — zoom drift:
+ * .zoom-body is now position:relative so #zoomCanvas can be absolutely
+ * positioned inside it without affecting the parent's clientWidth/clientHeight.
+ * This breaks the layout-feedback loop that caused the canvas to grow
+ * unboundedly after many navigations.
+ */
+.zoom-body{
+  flex:1;
+  min-height:0;     /* allow flex child to shrink below content size */
+  background:#000;
+  position:relative;
+}
+#zoomCanvas{
+  position:absolute;
+  inset:0;          /* fill .zoom-body exactly, out of normal flow */
+  display:block;
+  border-radius:4px;
+}
 
 .right-col{
   width:300px;
@@ -233,7 +253,6 @@ body{
   overflow:hidden;
 }
 .zoom-panel{flex:1;min-height:120px;display:flex;flex-direction:column}
-.zoom-body{flex:1;background:#000;display:flex;align-items:center;justify-content:center;padding:8px}
 .irow{
   display:flex;justify-content:space-between;
   padding:8px 10px;border-bottom:1px solid var(--border)

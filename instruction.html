@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cell Validator — Инструкция</title>
+  <title>LabelMe Validator — Instructions</title>
   <style>
     :root{
       --bg:#0d1117;
@@ -74,6 +74,7 @@
       margin:8px 0 0 20px;
       padding:0;
     }
+    li{margin-bottom:4px}
     code{
       background:var(--bg2);
       border:1px solid var(--border);
@@ -107,6 +108,9 @@
       font:12px/1.6 monospace;
       color:#c9d1d9;
     }
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+    th,td{padding:7px 10px;border:1px solid var(--border);text-align:left}
+    th{background:var(--bg2);color:var(--muted)}
     .muted{color:var(--muted)}
   </style>
 </head>
@@ -114,79 +118,95 @@
   <div class="wrap">
     <div class="top">
       <div>
-        <h1 class="title">🔬 Cell Validator — инструкция</h1>
-        <p class="sub">Как загружать JSON, размечать клетки, сохранять прогресс и экспортировать отчёт</p>
+        <h1 class="title">🔬 LabelMe Validator — Instructions</h1>
+        <p class="sub">How to load JSON files, label cells, save progress, and export results</p>
       </div>
-      <a class="btn" href="index.html">Открыть инструмент</a>
+      <a class="btn" href="index.html">Open Tool</a>
     </div>
 
     <section class="card">
-      <h2>1) Быстрый старт</h2>
+      <h2>1) Quick Start</h2>
       <ol>
-        <li>Откройте <code>index.html</code> и введите имя валидатора.</li>
-        <li>Загрузите данные одним из способов:
+        <li>Open <code>index.html</code> and enter your validator name. Your session is saved and will be restored automatically on next visit.</li>
+        <li>Load annotation data using one of the following methods:
           <ul>
-            <li><code>📂 Загрузить JSON</code> — один файл;</li>
-            <li><code>📁 Папка annotations</code> — выбрать папку с несколькими JSON.</li>
+            <li><code>📂 Load JSON</code> — open a single LabelMe JSON file;</li>
+            <li><code>📁 Annotations Folder</code> — select a folder containing multiple JSON files;</li>
+            <li>If the tool is served via HTTP, files placed in <code>annotations/</code> are listed automatically.</li>
           </ul>
         </li>
-        <li>Выберите файл из списка доступных и начните валидацию.</li>
+        <li>Click a file from the list to open it and start validation.</li>
       </ol>
     </section>
 
     <section class="card">
-      <h2>2) Как размечать клетки</h2>
+      <h2>2) How to Label Cells</h2>
       <ul>
-        <li>Текущая клетка показана справа (увеличенный фрагмент).</li>
-        <li>Ставьте метку кнопками в блоке «Назначить метку» или горячими клавишами:
-          <span class="kbd">1</span> steatosis,
-          <span class="kbd">2</span> mesenchymal_cells,
-          <span class="kbd">3</span> normal,
-          <span class="kbd">4</span> non_nuclear,
-          <span class="kbd">5</span> balloon_dystrophy.
-        </li>
-        <li>После выбора метки инструмент автоматически переходит к следующей клетке.</li>
-        <li>Навигация:
-          <span class="kbd">←</span>/<span class="kbd">→</span> — предыдущая/следующая,
-          кнопка «К последней» — к последней размеченной,
-          поле «№» — перейти к конкретной клетке.
-        </li>
+        <li>The current cell shape is displayed in the viewer panel on the left (zoomed-in fragment of the source image).</li>
+        <li>Assign a label using the buttons in the <b>Assign Label</b> panel or keyboard shortcuts:</li>
+      </ul>
+      <table>
+        <tr><th>Key</th><th>Label</th></tr>
+        <tr><td><span class="kbd">1</span></td><td>steatosis</td></tr>
+        <tr><td><span class="kbd">2</span></td><td>mesenchymal_cells</td></tr>
+        <tr><td><span class="kbd">3</span></td><td>normal</td></tr>
+        <tr><td><span class="kbd">4</span></td><td>non_nuclear</td></tr>
+        <tr><td><span class="kbd">5</span></td><td>balloon_dystrophy</td></tr>
+        <tr><td><span class="kbd">←</span> / <span class="kbd">→</span></td><td>Previous / Next cell</td></tr>
+        <tr><td><span class="kbd">Esc</span></td><td>Close cell list modal</td></tr>
+      </table>
+      <ul style="margin-top:10px">
+        <li>After assigning a label the tool automatically advances to the next cell.</li>
+        <li>Use <b>⏭ Last labeled</b> to jump back to the last cell you worked on.</li>
+        <li>Use the <b>number field + →</b> to jump directly to any cell by index.</li>
+        <li>Use <b>☰</b> to open the full cell list with search by number, original label, or validator label.</li>
       </ul>
     </section>
 
     <section class="card">
-      <h2>3) Сохранение прогресса</h2>
-      <h3>Локальное автосохранение</h3>
-      <p>Прогресс сохраняется автоматически в браузере и восстанавливается при повторном входе под тем же именем валидатора.</p>
+      <h2>3) Saving Progress</h2>
+      <h3>Automatic browser save</h3>
+      <p>Progress is saved to <code>localStorage</code> automatically after every label assignment. It is restored when you open the tool again with the same validator name. Your session (validator name) is also preserved across page refreshes.</p>
 
-      <h3>Сохранение в файл (рекомендуется)</h3>
+      <h3>File-based save (recommended)</h3>
       <ol>
-        <li>Нажмите <code>💾 Папка сохранения</code>.</li>
-        <li>Выберите папку для прогресса (можно рядом с проектом).</li>
-        <li>Инструмент будет автоматически обновлять файл вида:
-          <code>&lt;имя_json&gt;__&lt;валидатор&gt;.validation.json</code>.</li>
+        <li>Click <code>💾 Save Folder</code> in the header.</li>
+        <li>Choose any folder on your computer (e.g. next to your project).</li>
+        <li>The tool will automatically write and update a progress file:<br>
+          <code>&lt;annotation_file&gt;__&lt;validator_name&gt;.validation.json</code></li>
+        <li>On the next session, select the same save folder to restore progress from the file (this takes priority over browser storage).</li>
       </ol>
 
       <div class="note">
-        Если работаете через <code>file://</code>, получение списка файлов с сервера недоступно — используйте кнопку <code>📁 Папка annotations</code>.
+        When running from <code>file://</code> (double-clicking the HTML), automatic listing from the server is unavailable. Use the <code>📁 Annotations Folder</code> button instead.
       </div>
     </section>
 
     <section class="card">
-      <h2>4) Экспорт результата</h2>
-      <p>Кнопка <code>📊 Экспорт Excel</code> формирует общий отчёт по всем размеченным файлам текущего валидатора.</p>
-      <p>В таблицу входят: имя валидатора, файл, индекс клетки, координаты контура, исходная метка, метка валидатора, тип формы.</p>
-      <div class="ok">Перед завершением работы всегда делайте экспорт Excel как резервную копию.</div>
+      <h2>4) Exporting Results</h2>
+
+      <h3>📊 Excel report</h3>
+      <p>Click <code>📊 Export Excel</code> to download a <code>.xlsx</code> spreadsheet with a complete validation report across all files worked on by the current validator.</p>
+      <p>Columns: <i>Validator Name, File, Cell Index, Contour Coordinates, Original Label, Validator Label, Shape Type.</i></p>
+
+      <h3>📄 Corrected LabelMe JSON</h3>
+      <p>Click <code>📄 Export JSON</code> to download the original LabelMe JSON with the <code>label</code> field replaced by the corrected validator label for every validated shape. Shapes that have not been reviewed keep their original labels. The file is named <code>&lt;original_name&gt;_corrected.json</code> and is ready to use with LabelMe or downstream pipelines.</p>
+
+      <div class="ok">
+        Always export your results before closing a session. Use the Excel file as a human-readable record and the corrected JSON for further processing.
+      </div>
     </section>
 
     <section class="card">
-      <h2>5) Возможные проблемы</h2>
+      <h2>5) Troubleshooting</h2>
       <ul>
-        <li><b>Не открывается список JSON</b> — проверьте, что выбрана папка с файлами <code>.json</code>.</li>
-        <li><b>Нет изображения, только контуры</b> — в JSON отсутствует <code>imageData</code>.</li>
-        <li><b>Прогресс не восстановился</b> — убедитесь, что имя валидатора введено точно так же, как раньше.</li>
+        <li><b>JSON list does not appear</b> — make sure you selected a folder that actually contains <code>.json</code> files.</li>
+        <li><b>No image, only outlines</b> — the JSON file has no <code>imageData</code> field. Shapes are still visible and can be labeled.</li>
+        <li><b>Progress not restored</b> — make sure the validator name is entered exactly as before (case-sensitive).</li>
+        <li><b>Export JSON button is disabled</b> — a file must be loaded and at least one label must be assigned.</li>
+        <li><b>Save Folder not working</b> — this feature requires Chrome or Edge. Firefox does not support the File System Access API.</li>
       </ul>
-      <p class="muted">Версия инструкции: 1.0</p>
+      <p class="muted" style="margin-top:12px">Instruction version: 1.1</p>
     </section>
   </div>
 </body>

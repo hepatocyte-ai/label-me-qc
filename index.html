@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LabelMe QC</title>
+  <title>LabelMe Validator</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -13,15 +13,15 @@
   <div id="loginScreen">
     <div class="login-card">
       <div class="logo">🔬</div>
-      <h1>LabelMe QC</h1>
-      <p class="sub">Инструмент валидации разметки LabelMe</p>
+      <h1>LabelMe Validator</h1>
+      <p class="sub">LabelMe annotation validation tool</p>
 
       <div class="field">
-        <label>Имя валидатора</label>
-        <input id="nameInput" type="text" placeholder="Введите ваше имя…" />
+        <label>Validator name</label>
+        <input id="nameInput" type="text" placeholder="Enter your name…" />
       </div>
 
-      <button class="btn-primary" id="btnLogin">Начать работу →</button>
+      <button class="btn-primary" id="btnLogin">Start →</button>
     </div>
   </div>
 
@@ -29,25 +29,24 @@
   <div id="appScreen">
     <header class="header">
       <div class="header-left">
-        <div class="header-logo">🔬 LabelMe QC</div>
-        <div class="vbadge">Валидатор: <b id="vName">—</b></div>
+        <div class="header-logo">🔬 LabelMe Validator</div>
+        <div class="vbadge">Validator: <b id="vName">—</b></div>
       </div>
 
       <div class="header-right">
-        <button class="btn-icon" id="btnOpenInstr" title="Открыть инструкцию">❓ Инструкция</button>
+        <button class="btn-icon" id="btnOpenInstr" title="Open instructions">❓ Instructions</button>
 
-        <button class="btn-icon" id="btnToggleImg">🖼 Скрыть изображение</button>
-
-        <label class="btn-icon" for="jsonFileInput">📂 Загрузить JSON</label>
+        <label class="btn-icon" for="jsonFileInput">📂 Load JSON</label>
         <input type="file" id="jsonFileInput" accept=".json" />
 
-        <label class="btn-icon" for="folderInput">📁 Папка annotations</label>
+        <label class="btn-icon" for="folderInput">📁 Annotations Folder</label>
         <input type="file" id="folderInput" webkitdirectory directory multiple accept=".json" />
 
-        <button class="btn-icon green" id="btnExport">📊 Экспорт Excel</button>
-        <button class="btn-icon" id="btnBack">← Назад</button>
+        <button class="btn-icon green" id="btnExport">📊 Export Excel</button>
+        <button class="btn-icon green" id="btnExportJSON">📄 Export JSON</button>
+        <button class="btn-icon" id="btnBack">← Back</button>
 
-        <button class="btn-icon" id="btnPickSaveDir">💾 Папка сохранения</button>
+        <button class="btn-icon" id="btnPickSaveDir">💾 Save Folder</button>
       </div>
     </header>
 
@@ -62,14 +61,14 @@
     <div id="uploadArea">
       <div class="upload-box" id="uploadBox">
         <div class="uico">📂</div>
-        <h2>Загрузите LabelMe JSON</h2>
+        <h2>Load LabelMe JSON</h2>
         <p>
-          Перетащите файл сюда или нажмите кнопку выше.<br>
-          Для автосписка с сервера используйте папку <code>annotations/</code>.
+          Drag and drop a file here or use the button above.<br>
+          For automatic listing from the server, place files in the <code>annotations/</code> folder.
         </p>
 
         <div id="fileListContainer" class="file-list">
-          <h3>📋 Доступные файлы:</h3>
+          <h3>📋 Available files:</h3>
           <div class="file-items" id="fileListItems"></div>
         </div>
       </div>
@@ -78,35 +77,25 @@
     <div id="mainContent">
       <div id="imgPanel">
         <div class="panel-head">
-          Полное изображение
+          <span>Cell <b id="iIdx">—</b></span>
           <span class="ph-badge" id="shapeTypeBadge">—</span>
         </div>
-        <div id="canvasWrap">
-          <canvas id="mainCanvas"></canvas>
+        <div class="zoom-body" id="zoomBody">
+          <canvas id="zoomCanvas"></canvas>
         </div>
       </div>
 
       <div class="right-col">
-        <div class="panel zoom-panel">
-          <div class="panel-head">
-            <span>Клетка <b id="iIdx">—</b></span>
-            <span class="ph-badge" id="iType">—</span>
-          </div>
-          <div class="zoom-body" id="zoomBody">
-            <canvas id="zoomCanvas"></canvas>
-          </div>
-        </div>
-
         <div class="panel">
-          <div class="panel-head">Статус</div>
+          <div class="panel-head">Status</div>
           <div class="irow">
-            <span class="ik">Ваша метка</span>
-            <span id="iVal"><span class="chip chip-dim">не задана</span></span>
+            <span class="ik">Your label</span>
+            <span id="iVal"><span class="chip chip-dim">not set</span></span>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-head">Назначить метку</div>
+          <div class="panel-head">Assign Label</div>
           <div class="label-list">
             <button class="lbtn" data-l="steatosis">Steatosis <span class="lkey">1</span></button>
             <button class="lbtn" data-l="mesenchymal_cells">Mesenchymal Cells <span class="lkey">2</span></button>
@@ -118,14 +107,14 @@
 
         <div class="nav-block">
           <div class="nav-row">
-            <button class="btn-nav" id="btnPrev">← Пред.</button>
+            <button class="btn-nav" id="btnPrev">← Prev</button>
             <div class="nav-count"><strong id="navCur">1</strong> / <span id="navTotal">0</span></div>
-            <button class="btn-nav" id="btnNext">След. →</button>
+            <button class="btn-nav" id="btnNext">Next →</button>
           </div>
           <div class="nav-row2">
-            <button class="btn-last" id="btnLast">⏭ К последней</button>
+            <button class="btn-last" id="btnLast">⏭ Last labeled</button>
             <div class="jump-group">
-              <input type="number" id="jumpInput" min="1" placeholder="№" />
+              <input type="number" id="jumpInput" min="1" placeholder="#" />
               <button class="btn-jump" id="btnJump">→</button>
               <button class="btn-jump" id="btnOpenList">☰</button>
             </div>
@@ -139,11 +128,11 @@
   <div id="listModal">
     <div class="modal-box">
       <div class="modal-head">
-        <h3>Список клеток</h3>
+        <h3>Cell List</h3>
         <button class="modal-close" id="btnCloseList">✕</button>
       </div>
       <div class="modal-search">
-        <input type="text" id="listSearch" placeholder="Поиск по метке или номеру…" />
+        <input type="text" id="listSearch" placeholder="Search by label or number…" />
       </div>
       <div class="modal-list" id="modalList"></div>
     </div>

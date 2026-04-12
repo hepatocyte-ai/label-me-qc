@@ -3,9 +3,9 @@ let userName = "";
 let jData = null;
 let idx = 0;
 let vals = {};
-let allValsByFile = {}; // { [fileName]: { [cellIndex]: validationObj } }
+let allValsByFile = {};
 let showImg = true;
-let availableFiles = []; // [{displayName, type:'remote'|'local', url?, file?}]
+let availableFiles = [];
 let saveDirHandle = null;
 let currentFileName = "";
 let fileAutosaveTimer = null;
@@ -28,8 +28,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btnLogin").addEventListener("click", login);
   $("nameInput").addEventListener("keydown", (e) => e.key === "Enter" && login());
 
-  $("btnToggleImg").addEventListener("click", toggleImage);
   $("btnExport").addEventListener("click", exportXLSX);
+  $("btnExportJSON").addEventListener("click", exportCorrectedJSON);
   $("btnBack").addEventListener("click", backToUpload);
 
   $("jsonFileInput").addEventListener("change", loadFile);
@@ -67,6 +67,13 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btnOpenInstr").addEventListener("click", () => {
     window.open("instruction.html", "_blank");
   });
+
+  // Restore session on page reload
+  const savedUser = localStorage.getItem("cv_current_user");
+  if (savedUser) {
+    $("nameInput").value = savedUser;
+    login();
+  }
 });
 
 /* ===== Login ===== */
@@ -78,6 +85,7 @@ function login() {
   }
 
   userName = n;
+  localStorage.setItem("cv_current_user", n); // persist session across page reloads
   $("loginScreen").style.display = "none";
   $("appScreen").style.display = "flex";
   $("vName").textContent = n;
@@ -86,7 +94,7 @@ function login() {
     const s = localStorage.getItem("cv_" + n);
     if (s) {
       vals = JSON.parse(s).vals || {};
-      toast(`Восстановлено меток: ${Object.keys(vals).length}`);
+      toast(`Labels restored: ${Object.keys(vals).length}`);
     }
   } catch (_) {}
 
@@ -95,9 +103,8 @@ function login() {
 
 /* ===== File list loading ===== */
 async function loadFileList() {
-  // FIX: при file:// fetch директории блокируется браузером
   if (location.protocol === "file:") {
-    toast('Режим file://: выберите папку кнопкой "📁 Папка annotations"');
+    toast('In file:// mode: use the "📁 Annotations Folder" button to select a folder');
     return;
   }
 
@@ -117,12 +124,12 @@ async function loadFileList() {
         type: "remote",
         url: "annotations/" + href,
       }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, "ru"));
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     renderFileList();
   } catch (e) {
-    console.warn("Ошибка загрузки списка файлов:", e);
-    toast("Не удалось получить список из annotations/");
+    console.warn("Failed to load file list:", e);
+    toast("Could not retrieve list from annotations/ folder");
   }
 }
 
@@ -131,10 +138,12 @@ function loadFolder(e) {
   availableFiles = files
     .filter((f) => f.name.toLowerCase().endsWith(".json"))
     .map((f) => ({ displayName: f.name, type: "local", file: f }))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, "ru"));
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   renderFileList();
-  toast(availableFiles.length ? `Найдено JSON: ${availableFiles.length}` : "В папке нет JSON");
+  toast(availableFiles.length
+    ? `Found ${availableFiles.length} JSON file(s)`
+    : "No JSON files found in folder");
 }
 
 /* ===== Render list ===== */
@@ -173,14 +182,14 @@ async function loadAnnotationFile(fileEntry, itemEl) {
       data = JSON.parse(text);
     } else {
       const response = await fetch(fileEntry.url);
-      if (!response.ok) throw new Error("Файл не найден");
+      if (!response.ok) throw new Error("File not found");
       data = await response.json();
     }
 
-    if (!data.shapes) throw new Error("Нет поля shapes");
+    if (!data.shapes) throw new Error("Missing 'shapes' field");
     await openData(data, fileEntry.displayName);
   } catch (err) {
-    toast("Ошибка: " + err.message);
+    toast("Error: " + err.message);
   } finally {
     itemEl.classList.remove("loading");
     itemEl.textContent = originalText;
@@ -193,7 +202,7 @@ function handleDrop(e) {
   $("uploadBox").classList.remove("over");
   const f = e.dataTransfer.files?.[0];
   if (!f || !f.name.toLowerCase().endsWith(".json")) {
-    toast("Нужен .json файл");
+    toast("Please drop a .json file");
     return;
   }
   readJsonFile(f);
@@ -210,10 +219,10 @@ function readJsonFile(file) {
   reader.onload = async (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!data.shapes) throw new Error("Нет поля shapes");
+      if (!data.shapes) throw new Error("Missing 'shapes' field");
       await openData(data, file.name);
     } catch (err) {
-      toast("Ошибка парсинга: " + err.message);
+      toast("Parse error: " + err.message);
     }
   };
   reader.readAsText(file);
@@ -224,16 +233,16 @@ async function openData(data, fileName) {
   jData = data;
   idx = 0;
   currentFileName = fileName;
-  vals = {}; // прогресс будет отдельно для каждого JSON
+  vals = {}; // progress is tracked separately for each JSON file
 
-  // сначала localStorage для этого файла
+  // Load from localStorage first
   try {
     const k = lsKey();
     const s = localStorage.getItem(k);
     if (s) vals = JSON.parse(s).vals || {};
   } catch (_) {}
 
-  // затем, если выбрана папка — прогресс из файла (приоритетнее)
+  // Load from file if save folder is selected (takes priority over localStorage)
   await loadProgressFromFile();
 
   allValsByFile[currentFileName] = { ...vals };
@@ -245,7 +254,7 @@ async function openData(data, fileName) {
     await new Promise((resolve) => {
       img.onload = () => resolve();
       img.onerror = () => {
-        toast("Ошибка загрузки imageData");
+        toast("Error loading imageData");
         resolve();
       };
       img.src = data.imageData.startsWith("data:")
@@ -254,7 +263,7 @@ async function openData(data, fileName) {
     });
   } else {
     img.src = "";
-    toast("Поле imageData отсутствует — только контуры");
+    toast("No imageData field — showing outlines only");
   }
 
   initViewer(fileName);
@@ -272,7 +281,7 @@ function initViewer(fileName) {
 
   $("navTotal").textContent = n;
   $("jumpInput").max = n;
-  $("fileInfo").textContent = `${fileName} · ${n} кл. · ${iw}×${ih}`;
+  $("fileInfo").textContent = `${fileName} · ${n} cells · ${iw}×${ih}`;
 
   updateUI();
 }
@@ -291,13 +300,10 @@ function toggleImage() {
   showImg = !showImg;
   $("imgPanel").classList.toggle("hidden", !showImg);
   $("mainContent").classList.toggle("img-hidden", !showImg);
-  $("btnToggleImg").textContent = showImg ? "🖼 Скрыть изображение" : "🖼 Показать изображение";
+  $("btnToggleImg").textContent = showImg ? "🖼 Hide image" : "🖼 Show image";
 
   if (jData) {
-    requestAnimationFrame(() => {
-      drawMain(jData.shapes[idx]);
-      drawZoom(jData.shapes[idx]);
-    });
+    requestAnimationFrame(() => drawZoom(jData.shapes[idx]));
   }
 }
 
@@ -318,68 +324,61 @@ function updateUI() {
   $("progText").textContent = `${labeled} / ${total} (${pct}%)`;
 
   $("iIdx").textContent = `#${idx + 1}`;
-  $("iType").textContent = shape.shape_type || "polygon";
-  $("shapeTypeBadge").textContent = shape.shape_type || "polygon";
 
   const li = lastLabeledIdx();
   $("btnLast").disabled = li === null;
-  $("btnLast").textContent = li === null ? "⏭ К последней" : `⏭ К последней (#${li + 1})`;
+  $("btnLast").textContent = li === null ? "⏭ Last labeled" : `⏭ Last labeled (#${li + 1})`;
 
   if (curVal) {
     const col = LC[curVal.valLabel] || "#aaa";
     $("iVal").innerHTML = `<span class="chip" style="background:${hexA(col, .2)};color:${col};border:1px solid ${hexA(col, .45)}">${curVal.valLabel}</span>`;
   } else {
-    $("iVal").innerHTML = `<span class="chip chip-dim">не задана</span>`;
+    $("iVal").innerHTML = `<span class="chip chip-dim">not set</span>`;
   }
 
   updateBtns(curVal?.valLabel || null);
-  drawMain(shape);
   drawZoom(shape);
   save();
 }
 
 /* ===== Draw ===== */
-function drawMain(shape) {
-  if (!showImg || !jData) return;
-
-  const canvas = $("mainCanvas");
-  const ctx = canvas.getContext("2d");
-  const wrap = $("canvasWrap");
-
-  const maxW = Math.max(wrap.clientWidth - 16, 120);
-  const maxH = Math.max(wrap.clientHeight - 16, 120);
-  const iW = img.naturalWidth || jData.imageWidth || 800;
-  const iH = img.naturalHeight || jData.imageHeight || 600;
-  const sc = Math.min(maxW / iW, maxH / iH, 3);
-
-  canvas.width = Math.round(iW * sc);
-  canvas.height = Math.round(iH * sc);
-
-  ctx.fillStyle = "#101010";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (img.naturalWidth && img.complete) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  jData.shapes.forEach((s, i) => {
-    if (i === idx) return;
-    drawShape(ctx, s.points, s.shape_type, sc, "rgba(255,255,255,.25)", "rgba(255,255,255,.04)", 1);
-  });
-
-  const col = LC[vals[idx]?.valLabel] || "#ff6b6b";
-  drawShape(ctx, shape.points, shape.shape_type, sc, col, hexA(col, .2), 2.4);
-}
-
+/*
+ * BUG FIX — zoom drift / infinite grow:
+ * Previously, prepareCanvas() set canvas.style.width/height explicitly in px,
+ * which caused the canvas to expand its flex parent. On the next call,
+ * body.clientWidth was larger → canvas grew again → feedback loop.
+ *
+ * Fix: canvas is now position:absolute;inset:0 (CSS), so it is out of normal
+ * flow and cannot affect the parent's clientWidth/clientHeight.
+ * We read body dimensions FIRST, then set only the pixel buffer (canvas.width/height).
+ * No canvas.style.width/height manipulation needed.
+ */
 function drawZoom(shape) {
   const canvas = $("zoomCanvas");
   const ctx = canvas.getContext("2d");
   const body = $("zoomBody");
-  const W = Math.max(body.clientWidth - 14, 100);
-  const H = Math.max(body.clientHeight - 14, 90);
-  canvas.width = W;
-  canvas.height = H;
 
+  // body size is stable because canvas is absolutely positioned (out of flow)
+  const W = body.clientWidth;
+  const H = body.clientHeight;
+  if (W < 10 || H < 10) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const pw = Math.round(W * dpr);
+  const ph = Math.round(H * dpr);
+
+  // Resize pixel buffer only when dimensions actually change
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw;
+    canvas.height = ph;
+  }
+
+  // Reset transform to prevent accumulation between redraws
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, pw, ph);
+  // Scale subsequent drawing commands from CSS-pixel space to device-pixel space
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   if (!img.naturalWidth || !img.complete || !shape?.points?.length) return;
 
@@ -387,10 +386,12 @@ function drawZoom(shape) {
   const xs = pts.map((p) => p[0]);
   const ys = pts.map((p) => p[1]);
 
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
 
-  const pad = Math.max(maxX - minX, maxY - minY) * 0.5 + 14;
+  const pad = 512;
   const sx = Math.max(0, minX - pad);
   const sy = Math.max(0, minY - pad);
   const sw = Math.min(img.naturalWidth - sx, maxX - minX + 2 * pad);
@@ -488,17 +489,17 @@ function lastLabeledIdx() {
 
 function goToLast() {
   const li = lastLabeledIdx();
-  if (li === null) return toast("Нет размеченных клеток");
+  if (li === null) return toast("No labeled cells yet");
   idx = li;
   updateUI();
-  toast(`Переход к клетке #${li + 1}`);
+  toast(`Navigating to cell #${li + 1}`);
 }
 
 function jumpTo() {
   if (!jData) return;
   const v = parseInt($("jumpInput").value, 10);
   if (Number.isNaN(v) || v < 1 || v > jData.shapes.length) {
-    toast(`Введите номер от 1 до ${jData.shapes.length}`);
+    toast(`Enter a number between 1 and ${jData.shapes.length}`);
     return;
   }
   idx = v - 1;
@@ -566,7 +567,7 @@ function renderList() {
       badge.style.background = hexA(col, 0.15);
       badge.style.borderColor = hexA(col, 0.45);
     } else {
-      badge.textContent = "не задана";
+      badge.textContent = "not set";
       badge.style.color = "var(--text2)";
       badge.style.background = "var(--bg2)";
       badge.style.borderColor = "var(--border)";
@@ -577,7 +578,7 @@ function renderList() {
   });
 
   if (!ul.children.length) {
-    ul.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text2)">Ничего не найдено</div>`;
+    ul.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text2)">Nothing found</div>`;
   }
 
   const cur = ul.querySelector(".current");
@@ -610,21 +611,21 @@ function onGlobalKeydown(e) {
   }
 }
 
-/* ===== Export ===== */
+/* ===== Export XLSX ===== */
 function exportXLSX() {
-  if (!userName) return toast("Сначала введите имя валидатора");
+  if (!userName) return toast("Please enter validator name first");
 
   const all = collectAllProgressForUser();
-  const fileNames = Object.keys(all).sort((a, b) => a.localeCompare(b, "ru"));
+  const fileNames = Object.keys(all).sort((a, b) => a.localeCompare(b));
 
   const rows = [[
-    "Имя валидатора",
-    "Файл",
-    "Индекс клетки",
-    "Координаты контура",
-    "Исходная метка",
-    "Метка валидатора",
-    "Тип формы",
+    "Validator Name",
+    "File",
+    "Cell Index",
+    "Contour Coordinates",
+    "Original Label",
+    "Validator Label",
+    "Shape Type",
   ]];
 
   let totalRows = 0;
@@ -651,24 +652,58 @@ function exportXLSX() {
     }
   }
 
-  if (!totalRows) return toast("Нет данных для экспорта");
+  if (!totalRows) return toast("No data to export");
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws["!cols"] = [
-    { wch: 20 }, // Имя валидатора
-    { wch: 32 }, // Файл
-    { wch: 14 }, // Индекс клетки
-    { wch: 90 }, // Координаты
-    { wch: 24 }, // Исходная метка
-    { wch: 24 }, // Метка валидатора
-    { wch: 14 }, // Тип формы
+    { wch: 20 }, // Validator Name
+    { wch: 32 }, // File
+    { wch: 14 }, // Cell Index
+    { wch: 90 }, // Contour Coordinates
+    { wch: 24 }, // Original Label
+    { wch: 24 }, // Validator Label
+    { wch: 14 }, // Shape Type
   ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Validations");
   XLSX.writeFile(wb, `validation_${userName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
-  toast(`✓ Экспортировано записей: ${totalRows} (файлов: ${fileNames.length})`);
+  toast(`✓ Exported ${totalRows} record(s) from ${fileNames.length} file(s)`);
+}
+
+/* ===== Export Corrected JSON ===== */
+function exportCorrectedJSON() {
+  if (!jData) return toast("No file loaded");
+
+  const validatedCount = Object.keys(vals).length;
+  if (!validatedCount) return toast("No labels assigned yet");
+
+  // Deep-copy the original data to preserve all original fields intact
+  const corrected = JSON.parse(JSON.stringify(jData));
+
+  // Replace 'label' only for shapes that have been validated
+  let correctedCount = 0;
+  for (const [idxStr, val] of Object.entries(vals)) {
+    const i = Number(idxStr);
+    if (corrected.shapes[i] && val.valLabel) {
+      corrected.shapes[i].label = val.valLabel;
+      correctedCount++;
+    }
+  }
+
+  const fileName = currentFileName.replace(/\.json$/i, "_corrected.json");
+  const blob = new Blob([JSON.stringify(corrected, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  toast(`✓ Exported JSON with ${correctedCount} corrected label(s)`);
 }
 
 /* ===== Utils ===== */
@@ -717,21 +752,20 @@ function progressFileName() {
 
 async function pickSaveDir() {
   if (!window.showDirectoryPicker) {
-    toast("Браузер не поддерживает запись в папку (нужен Chrome/Edge)");
+    toast("Your browser doesn't support folder write access (use Chrome or Edge)");
     return;
   }
 
   try {
     saveDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    toast("Папка сохранения выбрана");
-    // если файл уже открыт — попробуем подтянуть прогресс из файла
+    toast("Save folder selected");
     if (jData && currentFileName) {
       await loadProgressFromFile();
       updateUI();
       await persistToFile();
     }
   } catch {
-    // пользователь отменил
+    // User cancelled the picker
   }
 }
 
@@ -756,7 +790,7 @@ function scheduleFileSave() {
   clearTimeout(fileAutosaveTimer);
   fileAutosaveTimer = setTimeout(() => {
     persistToFile().catch((e) => {
-      console.warn("Ошибка автосохранения в файл:", e);
+      console.warn("Auto-save to file failed:", e);
     });
   }, 200);
 }
@@ -773,24 +807,24 @@ async function loadProgressFromFile() {
     if (parsed && parsed.vals && typeof parsed.vals === "object") {
       vals = parsed.vals;
       allValsByFile[currentFileName] = { ...vals };
-      toast(`Загружен прогресс из файла: ${Object.keys(vals).length}`);
+      toast(`Progress loaded from file: ${Object.keys(vals).length} label(s)`);
     }
   } catch {
-    // файла ещё нет — это нормально
+    // File does not exist yet — that's fine
   }
 }
 
 function collectAllProgressForUser() {
   const result = {};
 
-  // 1) Что уже в памяти в текущей сессии
+  // 1) In-memory progress from the current session
   for (const [fileName, fileVals] of Object.entries(allValsByFile)) {
     if (fileVals && Object.keys(fileVals).length) {
       result[fileName] = { ...fileVals };
     }
   }
 
-  // 2) Что сохранено пофайлово в localStorage
+  // 2) Per-file progress persisted in localStorage
   const prefix = `cv_${userName}__`;
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -806,4 +840,18 @@ function collectAllProgressForUser() {
   }
 
   return result;
+}
+
+// General-purpose canvas sizing helper (kept for potential future use)
+function prepareCanvas(canvas, ctx, cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
